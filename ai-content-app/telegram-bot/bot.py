@@ -1,7 +1,7 @@
 import logging
 import os
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 logging.basicConfig(
@@ -15,20 +15,17 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "http://localhost:3000")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "✨ Натали — генерация здесь",
-                web_app=WebAppInfo(url=WEBAPP_URL),
-            )
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Persistent keyboard button (always visible at bottom of chat)
+    reply_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🚀 Открыть Натали", web_app=WebAppInfo(url=WEBAPP_URL))]],
+        resize_keyboard=True,
+        input_field_placeholder="Нажми кнопку ниже 👇",
+    )
     await update.message.reply_text(
         "👋 Привет! Я <b>Натали</b> — твой AI-генератор контента.\n\n"
         "🎬 Создаю видео для твоих персонажей на автопилоте.\n\n"
         "Нажми кнопку ниже, чтобы начать 👇",
-        reply_markup=reply_markup,
+        reply_markup=reply_keyboard,
         parse_mode="HTML",
     )
 
