@@ -21,10 +21,12 @@ jobs:
           timeout: 600s
           script: |
             set -e
+            git config --global --add safe.directory /opt/natalisetka/ai-content-app
             cd /opt/natalisetka/ai-content-app
 
-            # Pull latest code
-            git pull origin main
+            # Pull latest code (reset hard to avoid merge conflicts)
+            git fetch origin main
+            git reset --hard origin/main
 
             # Rebuild and restart changed services
             docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache backend frontend telegram-bot
