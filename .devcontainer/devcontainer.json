@@ -1,0 +1,33 @@
+{
+  "name": "natalisetka",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+  "forwardPorts": [3000, 8000, 5432, 6379],
+  "portsAttributes": {
+    "3000": {
+      "label": "Frontend (Web App)",
+      "visibility": "public",
+      "onAutoForward": "silent"
+    },
+    "8000": {
+      "label": "Backend API",
+      "visibility": "public",
+      "onAutoForward": "silent"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "visibility": "private",
+      "onAutoForward": "silent"
+    },
+    "6379": {
+      "label": "Redis",
+      "visibility": "private",
+      "onAutoForward": "silent"
+    }
+  },
+  "postStartCommand": "cd /workspaces/natalisetka/ai-content-app && docker compose up -d"
+}

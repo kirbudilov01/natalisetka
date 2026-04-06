@@ -1,0 +1,7 @@
+5-42-120-23.sslip.io {
+    reverse_proxy frontend:3000
+}
+
+api-5-42-120-23.sslip.io {
+    reverse_proxy backend:8000
+}
