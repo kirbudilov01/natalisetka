@@ -1,0 +1,44 @@
+# Kohya SDXL LoRA training config template.
+# Placeholders like {data_dir}, {output_dir}, {trigger_word} are filled at runtime.
+
+[model_arguments]
+pretrained_model_name_or_path = "stabilityai/stable-diffusion-xl-base-1.0"
+v2 = false
+v_parameterization = false
+
+[dataset_arguments]
+train_data_dir = "{data_dir}/train_images"
+resolution = "1024,1024"
+enable_bucket = true
+min_bucket_reso = 512
+max_bucket_reso = 2048
+bucket_reso_steps = 64
+
+[training_arguments]
+output_dir = "{output_dir}"
+output_name = "character"
+save_model_as = "safetensors"
+max_train_steps = 1500
+train_batch_size = 1
+gradient_accumulation_steps = 4
+learning_rate = 1e-4
+unet_lr = 1e-4
+text_encoder_lr = 2e-5
+lr_scheduler = "cosine_with_restarts"
+lr_warmup_steps = 100
+mixed_precision = "fp16"
+save_every_n_steps = 500
+seed = 42
+cache_latents = true
+cache_latents_to_disk = false
+xformers = true
+gradient_checkpointing = true
+max_token_length = 225
+caption_extension = ".txt"
+shuffle_caption = true
+keep_tokens = 1
+
+[network_arguments]
+network_module = "networks.lora"
+network_dim = 32
+network_alpha = 16

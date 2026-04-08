@@ -12,6 +12,80 @@ export async function getEconomy() {
   return res.json()
 }
 
+// ---------------------------------------------------------------------------
+// Characters
+// ---------------------------------------------------------------------------
+
+export interface CharacterAPI {
+  id: number
+  name: string
+  niche: string
+  instagram: string
+  avatar_url: string
+  color: string
+  trigger_word: string
+  lora_status: 'none' | 'training' | 'ready' | 'error'
+  created_at: string
+}
+
+export async function getCharacters(): Promise<CharacterAPI[]> {
+  const res = await fetch(`${API}/characters`)
+  if (!res.ok) throw new Error('Failed to fetch characters')
+  return res.json()
+}
+
+export async function getCharacter(id: number): Promise<CharacterAPI> {
+  const res = await fetch(`${API}/characters/${id}`)
+  if (!res.ok) throw new Error('Failed to fetch character')
+  return res.json()
+}
+
+export async function createCharacter(data: {
+  name: string
+  niche: string
+  instagram: string
+  avatar_url: string
+  color: string
+  trigger_word: string
+}): Promise<CharacterAPI> {
+  const res = await fetch(`${API}/characters`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error('Failed to create character')
+  return res.json()
+}
+
+export async function uploadTrainingImages(
+  characterId: number,
+  files: File[],
+): Promise<{ saved: number; files: string[] }> {
+  const form = new FormData()
+  for (const file of files) {
+    form.append('files', file)
+  }
+  const res = await fetch(`${API}/characters/${characterId}/upload-images`, {
+    method: 'POST',
+    body: form,
+  })
+  if (!res.ok) throw new Error('Failed to upload images')
+  return res.json()
+}
+
+export async function triggerLoraTraining(
+  characterId: number,
+): Promise<{ ok: boolean; lora_status: string }> {
+  const res = await fetch(`${API}/characters/${characterId}/train`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as any).detail || 'Failed to start training')
+  }
+  return res.json()
+}
+
 export async function generateConcept(
   characterId: number,
   format: string,

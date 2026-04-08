@@ -3,3 +3,12 @@ psycopg2-binary==2.9.9
 redis==5.0.1
 rq==1.16.1
 requests==2.31.0
+toml==0.10.2
+
+# ML inference (diffusers + SDXL)
+diffusers==0.27.2
+transformers==4.40.1
+accelerate==0.29.3
+safetensors==0.4.3
+xformers==0.0.26.post1
+Pillow==10.3.0

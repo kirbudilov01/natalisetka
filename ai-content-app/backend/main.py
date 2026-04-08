@@ -2,20 +2,27 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import redis as redis_lib
 import rq
 from cryptography.fernet import Fernet
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db, wait_for_db
-from models import Job, ServiceAccess
+from models import Character, Job, ServiceAccess
+
+DATA_ROOT = Path(os.getenv("DATA_ROOT", "/data"))
+OUTPUT_DIR = DATA_ROOT / "output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 try:
     from openai import OpenAI
@@ -102,6 +109,24 @@ async def lifespan(app: FastAPI):
                 """
             )
         )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS characters (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(120) NOT NULL,
+                    niche VARCHAR(120) NOT NULL DEFAULT '',
+                    instagram VARCHAR(255) NOT NULL DEFAULT '',
+                    avatar_url TEXT NOT NULL DEFAULT '',
+                    color VARCHAR(120) NOT NULL DEFAULT 'from-pink-500 to-rose-500',
+                    trigger_word VARCHAR(80) NOT NULL,
+                    lora_status VARCHAR(20) NOT NULL DEFAULT 'none',
+                    lora_path TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
 
     yield
 
@@ -115,6 +140,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 
 redis_conn = redis_lib.from_url(REDIS_URL)
 task_queue = rq.Queue(connection=redis_conn)
@@ -166,6 +193,15 @@ class ServiceAccessCreate(BaseModel):
     account_login: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=1000)
     notes: str | None = Field(default=None, max_length=2000)
+
+
+class CharacterCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    niche: str = Field(default="", max_length=120)
+    instagram: str = Field(default="", max_length=255)
+    avatar_url: str = Field(default="", max_length=2048)
+    color: str = Field(default="from-pink-500 to-rose-500", max_length=120)
+    trigger_word: str = Field(min_length=1, max_length=80)
 
 
 @app.get("/health")
@@ -414,6 +450,116 @@ def delete_access(access_id: str, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Characters
+# ---------------------------------------------------------------------------
+
+def _character_to_dict(char: Character) -> dict:
+    return {
+        "id": char.id,
+        "name": char.name,
+        "niche": char.niche,
+        "instagram": char.instagram,
+        "avatar_url": char.avatar_url,
+        "color": char.color,
+        "trigger_word": char.trigger_word,
+        "lora_status": char.lora_status,
+        "created_at": char.created_at,
+    }
+
+
+@app.get("/characters")
+def list_characters(db: Session = Depends(get_db)):
+    chars = db.query(Character).order_by(Character.id).all()
+    return [_character_to_dict(c) for c in chars]
+
+
+@app.post("/characters", status_code=201)
+def create_character(payload: CharacterCreate, db: Session = Depends(get_db)):
+    char = Character(
+        name=payload.name.strip(),
+        niche=payload.niche.strip(),
+        instagram=payload.instagram.strip(),
+        avatar_url=payload.avatar_url.strip(),
+        color=payload.color.strip(),
+        trigger_word=payload.trigger_word.strip().lower().replace(" ", "_"),
+    )
+    db.add(char)
+    db.commit()
+    db.refresh(char)
+    return _character_to_dict(char)
+
+
+@app.get("/characters/{character_id}")
+def get_character(character_id: int, db: Session = Depends(get_db)):
+    char = db.query(Character).filter(Character.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return _character_to_dict(char)
+
+
+@app.post("/characters/{character_id}/upload-images")
+async def upload_training_images(
+    character_id: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+):
+    char = db.query(Character).filter(Character.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    train_dir = (
+        DATA_ROOT / "characters" / str(character_id)
+        / "train_images" / f"10_{char.trigger_word}"
+    )
+    train_dir.mkdir(parents=True, exist_ok=True)
+
+    saved: list[str] = []
+    allowed_exts = {".jpg", ".jpeg", ".png", ".webp"}
+    for upload in files:
+        ext = Path(upload.filename or "").suffix.lower()
+        if ext not in allowed_exts:
+            continue
+        dest = train_dir / f"{uuid.uuid4()}{ext}"
+        with dest.open("wb") as fh:
+            shutil.copyfileobj(upload.file, fh)
+        saved.append(dest.name)
+
+    return {"saved": len(saved), "files": saved}
+
+
+@app.post("/characters/{character_id}/train")
+def trigger_lora_training(character_id: int, db: Session = Depends(get_db)):
+    char = db.query(Character).filter(Character.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    train_dir = (
+        DATA_ROOT / "characters" / str(character_id)
+        / "train_images" / f"10_{char.trigger_word}"
+    )
+    image_count = len(list(train_dir.glob("*"))) if train_dir.exists() else 0
+    if image_count < 5:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least 5 training images, got {image_count}",
+        )
+
+    if char.lora_status == "training":
+        raise HTTPException(status_code=409, detail="Training already in progress")
+
+    char.lora_status = "training"
+    db.commit()
+
+    task_queue.enqueue(
+        "tasks.train_lora",
+        character_id,
+        job_timeout=7200,  # 2 hours
+    )
+
+    return {"ok": True, "lora_status": "training"}
 
 
 @app.get("/jobs")

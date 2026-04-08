@@ -35,6 +35,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ACCESS_VAULT_KEY: ${ACCESS_VAULT_KEY:-}
+      DATA_ROOT: /data
+    volumes:
+      - lora_data:/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,12 +51,24 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-aicontentdb}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATA_ROOT: /data
+      KOHYA_SCRIPT: /kohya_ss/sdxl_train_network.py
+      SDXL_MODEL: ${SDXL_MODEL:-stabilityai/stable-diffusion-xl-base-1.0}
+    volumes:
+      - lora_data:/data
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   telegram-bot:
     build: ./telegram-bot
@@ -74,3 +89,4 @@ services:
 
 volumes:
   postgres_data:
+  lora_data:

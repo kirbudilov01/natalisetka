@@ -29,3 +29,19 @@ class ServiceAccess(Base):
     password_encrypted = Column(Text, nullable=False)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Character(Base):
+    __tablename__ = "characters"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(120), nullable=False)
+    niche = Column(String(120), nullable=False, default="")
+    instagram = Column(String(255), nullable=False, default="")
+    avatar_url = Column(Text, nullable=False, default="")
+    color = Column(String(120), nullable=False, default="from-pink-500 to-rose-500")
+    trigger_word = Column(String(80), nullable=False)
+    # lora_status: none | training | ready | error
+    lora_status = Column(String(20), nullable=False, default="none")
+    lora_path = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
